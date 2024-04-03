@@ -1,9 +1,9 @@
 package main
 
-import ( "fmt"
-		"sync"
-		// "time"
-		// "log"
+import ( "sync"
+		 "log"
+		 "github.com/gorilla/websocket"
+		 "github.com/gin-gonic/gin"
 )
 
 type Broker struct {
@@ -11,6 +11,7 @@ type Broker struct {
 	publishChannel chan string
 	subscribeChannel map[chan string]struct{}
 	mutex sync.RWMutex
+	upgrader websocket.Upgrader
 }
 
 func NewBroker() *Broker {
@@ -62,22 +63,35 @@ func (broker *Broker) Publish(message string) {
 func main() {
 	broker := NewBroker()
 	go broker.Start()
+	defer broker.Stop()
 
-	subscriber := broker.Subscribe()
-	go func() {
+	route := gin.Default()
+
+	route.POST("/ws/publish", func(c *gin.Context) {
+		message := c.PostForm("message")
+		broker.Publish(message)
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
+	route.GET("/ws/subscribe", func(c *gin.Context) {
+		webSocket, err := broker.upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		defer webSocket.Close()
+
+		subscriber := broker.Subscribe()
+		defer broker.Unsubscribe(subscriber)
+
 		for {
 			message := <-subscriber
-			fmt.Println(message)
+			err := webSocket.WriteMessage(websocket.TextMessage, []byte(message))
+			if err != nil {
+				log.Println(err)
+				return
+			}
 		}
-	}()
-
-	broker.Publish("123")
-	broker.Publish("som")
-	broker.Publish("teste")
-	broker.Publish("123")
-	broker.Publish("som")
-
-	broker.Unsubscribe(subscriber)
-	broker.Stop()
-
+	})
+	route.Run(":8080")
 }
