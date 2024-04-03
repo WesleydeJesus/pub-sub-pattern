@@ -2,6 +2,7 @@ package main
 
 import ( "sync"
 		 "log"
+		 "net/http"
 		 "github.com/gorilla/websocket"
 		 "github.com/gin-gonic/gin"
 )
@@ -19,6 +20,11 @@ func NewBroker() *Broker {
 		stopChannel: make(chan struct{}),
 		publishChannel: make(chan string),
 		subscribeChannel: make(map[chan string]struct{}),
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
 	}
 }
 
