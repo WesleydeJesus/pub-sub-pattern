@@ -1,10 +1,8 @@
-package main
+package broker
 
 import ( "sync"
-		 "log"
-		 "net/http"
 		 "github.com/gorilla/websocket"
-		 "github.com/gin-gonic/gin"
+		 "net/http"
 )
 
 type Broker struct {
@@ -12,7 +10,7 @@ type Broker struct {
 	publishChannel chan string
 	subscribeChannel map[chan string]struct{}
 	mutex sync.RWMutex
-	upgrader websocket.Upgrader
+	Upgrader websocket.Upgrader
 }
 
 func NewBroker() *Broker {
@@ -20,7 +18,7 @@ func NewBroker() *Broker {
 		stopChannel: make(chan struct{}),
 		publishChannel: make(chan string),
 		subscribeChannel: make(map[chan string]struct{}),
-		upgrader: websocket.Upgrader{
+		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
@@ -64,40 +62,4 @@ func (broker *Broker) Unsubscribe(channel chan string) {
 
 func (broker *Broker) Publish(message string) {
 	broker.publishChannel <- message
-}
-
-func main() {
-	broker := NewBroker()
-	go broker.Start()
-	defer broker.Stop()
-
-	route := gin.Default()
-
-	route.POST("/ws/publish", func(c *gin.Context) {
-		message := c.PostForm("message")
-		broker.Publish(message)
-		c.JSON(200, gin.H{"status": "ok"})
-	})
-
-	route.GET("/ws/subscribe", func(c *gin.Context) {
-		webSocket, err := broker.upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		defer webSocket.Close()
-
-		subscriber := broker.Subscribe()
-		defer broker.Unsubscribe(subscriber)
-
-		for {
-			message := <-subscriber
-			err := webSocket.WriteMessage(websocket.TextMessage, []byte(message))
-			if err != nil {
-				log.Println(err)
-				return
-			}
-		}
-	})
-	route.Run(":8080")
 }
