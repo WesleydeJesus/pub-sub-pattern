@@ -1,19 +1,25 @@
 package handlers
 
 import (
-    "log"
-    "github.com/gin-gonic/gin"
-    "github.com/gorilla/websocket"
-    "pub-sub/broker"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"log"
+	"pub-sub/broker"
+	"net/http"
 )
 
 func InitializeRouters(broker *broker.Broker) *gin.Engine {
-    route := gin.Default()
+	route := gin.Default()
 
-    	route.POST("/ws/publish", func(c *gin.Context) {
-		message := c.PostForm("message")
-		broker.Publish(message)
-		c.JSON(200, gin.H{"status": "ok"})
+	route.POST("/ws/publish", func(c *gin.Context) {
+		jsonData, err := c.GetRawData()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		broker.Publish(jsonData)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
 	route.GET("/ws/subscribe", func(c *gin.Context) {
@@ -37,5 +43,5 @@ func InitializeRouters(broker *broker.Broker) *gin.Engine {
 		}
 	})
 
-    return route
+	return route
 }
